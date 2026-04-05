@@ -395,7 +395,7 @@ public class AFDynamicsOrganizer : EditorWindow
         ProcessCopyGroup(mappingItems.Where(m => m.SourceComponent is VRCContactSender || m.SourceComponent is VRCContactReceiver));
 
         Undo.CollapseUndoOperations(Undo.GetCurrentGroup());
-        Debug.Log($"Successfully copied dynamics to {targetAvatar.name}!");
+        Debug.Log($"{Name}: Successfully copied dynamics to {targetAvatar.name}!");
     }
 
     private void ProcessCopyGroup(IEnumerable<CopyMappingItem> group)
@@ -680,7 +680,7 @@ public class AFDynamicsOrganizer : EditorWindow
         }
         Undo.CollapseUndoOperations(Undo.GetCurrentGroup());
         RefreshLists();
-        Debug.Log("Dynamics Organized!");
+        Debug.Log($"{Name}: Dynamics Organized!");
     }
 
     private void ProcessSection<T>(List<SelectionItem<T>> items, string folderName, ref Transform parent, ref Dictionary<string, string> pathMap) where T : Component
@@ -804,7 +804,7 @@ public class AFDynamicsOrganizer : EditorWindow
         Undo.CollapseUndoOperations(Undo.GetCurrentGroup());
 
         RefreshLists();
-        Debug.Log($"[Organizer] Successfully removed {totalRemoved} components from {avatarDescriptor.name}.");
+        Debug.Log($"{Name}: Successfully removed {totalRemoved} components from {avatarDescriptor.name}.");
     }
 
     private List<AnimatorState> GetAllStates(AnimatorStateMachine stateMachine)

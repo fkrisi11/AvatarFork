@@ -1,17 +1,17 @@
 {
   "name": "com.tohruthedragon.avatarfork",
   "displayName": "TohruTheDragon - Avatar Fork",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A toolset for creating custom copies of avatars",
   "url": "https://github.com/tohruthedragon/AvatarFork",
   "vpmDependencies": {},
   "type": "tool",
   "keywords": [
-     "mesh fix",
-     "unique copy",
-     "animator",
-     "reset",
-     "write defaults"
+    "mesh fix",
+    "unique copy",
+    "animator",
+    "reset",
+    "write defaults"
   ],
   "author": {
     "name": "TohruTheDragon"

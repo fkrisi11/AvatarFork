@@ -94,7 +94,7 @@ public class AFBoneRemapper : EditorWindow
             EditorUtility.SetDirty(smr);
         }
 
-        Debug.Log("Bone Remapping complete.");
+        Debug.Log($"{Name}: Bone Remapping complete.");
     }
 
     private string GetRelativePath(Transform t, Transform root)

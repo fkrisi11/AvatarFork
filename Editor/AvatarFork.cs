@@ -5,6 +5,8 @@ using UnityEditor;
 
 public class AvatarFork : EditorWindow
 {
+    private Vector2 scrollPosition;
+
     [MenuItem("TohruTheDragon/Avatar Fork/Main Window", false, -100)]
     public static void ShowWindow()
     {
@@ -13,6 +15,8 @@ public class AvatarFork : EditorWindow
 
     private void OnGUI()
     {
+        scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
+
         EditorGUILayout.HelpBox("Welcome to Avatar Fork: a set of tools, that allows you to create custom versions of avatars, that arrived in a unitypackage.\nThe order of the tools on the UI represent my recommendation, for dealing with brand new avatars.", MessageType.Info);
 
         EditorGUILayout.Space(15);
@@ -41,6 +45,12 @@ public class AvatarFork : EditorWindow
                 GetWindow<AFParameterOrganizer>(AFParameterOrganizer.Name);
             }, AFParameterOrganizer.Name);
 
+        DrawButton(AFWDAgnosticHelper.Name,
+            "Find what properties are not animated in animations, that are animated in other states", () =>
+            {
+                GetWindow<AFWDAgnosticHelper>(AFWDAgnosticHelper.Name);
+            }, AFWDAgnosticHelper.Name);
+
         DrawButton(AFWDOffResetHelper.Name,
             "Only reset blendshapes in your Reset animation, that you actually use elsewhere", () =>
             {
@@ -58,6 +68,8 @@ public class AvatarFork : EditorWindow
             {
                 GetWindow<AFBoneRemapper>(AFBoneRemapper.Name);
             }, AFBoneRemapper.Name);
+
+        EditorGUILayout.EndScrollView();
     }
 
     private void DrawButton(string title, string description, System.Action action, string buttonText)
@@ -71,12 +83,10 @@ public class AvatarFork : EditorWindow
         GUILayout.Label(title, EditorStyles.boldLabel);
         EditorGUILayout.EndHorizontal();
 
-        // Description text
         EditorGUILayout.LabelField(description, EditorStyles.wordWrappedLabel);
 
         EditorGUILayout.Space(5);
 
-        // Action Button
         if (GUILayout.Button(buttonText, GUILayout.Height(25)))
         {
             action.Invoke();
