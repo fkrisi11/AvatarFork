@@ -6,6 +6,7 @@ using UnityEditor.Animations;
 using System.Collections.Generic;
 using System.Linq;
 using VRC.SDK3.Avatars.Components;
+using VRC.SDK3.Avatars.ScriptableObjects;
 
 public class AFParameterOrganizer : EditorWindow
 {
@@ -13,6 +14,10 @@ public class AFParameterOrganizer : EditorWindow
 
     private VRCAvatarDescriptor avatarDescriptor;
     private AnimatorController currentController;
+
+    private int toolbarIndex = 0;
+    private readonly string[] toolbarLabels = { "Animator", "Expression Parameters" };
+    private bool IsExpressionTab => toolbarIndex == 1;
 
     private int selectedLayerIndex = 4; // Defaults to FX layer
     private readonly string[] layerNames = { "Base", "Additive", "Action", "Gesture", "FX", "Sitting", "T Pose", "IK Pose" };
@@ -107,7 +112,23 @@ public class AFParameterOrganizer : EditorWindow
 
     private void OnGUI()
     {
-        EditorGUILayout.HelpBox("Organize your animator parameters, either with the buttons, or by selecting parameters, and dragging them around. \nYou can use Shift to select multiple parameters at once.", MessageType.Info);
+        EditorGUILayout.Space();
+        EditorGUI.BeginChangeCheck();
+        toolbarIndex = GUILayout.Toolbar(toolbarIndex, toolbarLabels);
+        if (EditorGUI.EndChangeCheck())
+        {
+            ClearSelection();
+        }
+        EditorGUILayout.Space();
+
+        if (IsExpressionTab)
+        {
+            EditorGUILayout.HelpBox("Organize the parameters of the Expression Parameters assigned in the Avatar Descriptor, either with the buttons, or by selecting parameters, and dragging them around. \nYou can use Shift to select multiple parameters at once.", MessageType.Info);
+        }
+        else
+        {
+            EditorGUILayout.HelpBox("Organize your animator parameters, either with the buttons, or by selecting parameters, and dragging them around. \nYou can use Shift to select multiple parameters at once.", MessageType.Info);
+        }
 
         Event e = Event.current;
 
@@ -133,6 +154,19 @@ public class AFParameterOrganizer : EditorWindow
         if (avatarDescriptor == null)
         {
             EditorGUILayout.HelpBox("Please assign a VRC Avatar Descriptor.", MessageType.Info);
+            return;
+        }
+
+        if (IsExpressionTab)
+        {
+            if (avatarDescriptor.expressionParameters == null || avatarDescriptor.expressionParameters.parameters == null)
+            {
+                EditorGUILayout.HelpBox("No Expression Parameters assigned in the Avatar Descriptor.", MessageType.Warning);
+                return;
+            }
+
+            DrawOptionsAndActions();
+            DrawParameterList();
             return;
         }
 
@@ -199,12 +233,14 @@ public class AFParameterOrganizer : EditorWindow
 
     private void DrawParameterList()
     {
+        List<string> names = GetParameterNames();
+        List<string> types = GetParameterTypes();
+
         GUILayout.Space(10);
-        EditorGUILayout.LabelField($"Parameters ({currentController.parameters.Length})", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField($"Parameters ({names.Count})", EditorStyles.boldLabel);
 
         Event e = Event.current;
-        AnimatorControllerParameter[] parameters = currentController.parameters;
-        int totalParams = parameters.Length;
+        int totalParams = names.Count;
 
         scrollPosition = GUILayout.BeginScrollView(scrollPosition, "box", GUILayout.ExpandHeight(true));
 
@@ -309,8 +345,8 @@ public class AFParameterOrganizer : EditorWindow
                 rowRect.height
             );
 
-            GUI.Label(nameRect, parameters[i].name);
-            GUI.Label(typeRect, parameters[i].type.ToString(), rightAlignedStyle);
+            GUI.Label(nameRect, names[i]);
+            GUI.Label(typeRect, types[i], rightAlignedStyle);
         }
 
         GUILayout.EndScrollView();
@@ -323,8 +359,8 @@ public class AFParameterOrganizer : EditorWindow
 
         dragData.Sort();
 
-        var list = currentController.parameters.ToList();
-        var itemsToMove = new List<AnimatorControllerParameter>();
+        var list = Enumerable.Range(0, GetParameterNames().Count).ToList();
+        var itemsToMove = new List<int>();
 
         foreach (int index in dragData)
         {
@@ -351,40 +387,42 @@ public class AFParameterOrganizer : EditorWindow
         }
         lastSelectedIndex = selectedIndices.Last();
 
-        ApplyNewParameters(list.ToArray());
+        ApplyOrder(list);
     }
 
     private void SortParameters(bool reverseOrder)
     {
-        var list = currentController.parameters.ToList();
+        List<string> names = GetParameterNames();
+        var list = Enumerable.Range(0, names.Count).ToList();
 
         list.Sort((a, b) =>
         {
             if (enablePinnedOptions)
             {
-                bool aPinned = pinnedParams.Contains(a.name);
-                bool bPinned = pinnedParams.Contains(b.name);
+                bool aPinned = pinnedParams.Contains(names[a]);
+                bool bPinned = pinnedParams.Contains(names[b]);
 
                 if (aPinned && !bPinned) return reverseOrder ? 1 : -1;
                 if (!aPinned && bPinned) return reverseOrder ? -1 : 1;
             }
 
-            int comparison = a.name.CompareTo(b.name);
+            int comparison = names[a].CompareTo(names[b]);
             return reverseOrder ? -comparison : comparison;
         });
 
-        ApplyNewParameters(list.ToArray());
+        ApplyOrder(list);
     }
 
     private void GroupByPath()
     {
-        var oldParams = currentController.parameters.ToList();
-        var groupedList = new List<AnimatorControllerParameter>();
+        List<string> names = GetParameterNames();
+        var oldParams = Enumerable.Range(0, names.Count).ToList();
+        var groupedList = new List<int>();
         var processedRoots = new HashSet<string>();
 
         foreach (var p in oldParams)
         {
-            string rootFolder = GetRootFolder(p.name);
+            string rootFolder = GetRootFolder(names[p]);
 
             // If we haven't processed this main category yet
             if (!processedRoots.Contains(rootFolder))
@@ -392,12 +430,12 @@ public class AFParameterOrganizer : EditorWindow
                 processedRoots.Add(rootFolder);
 
                 // Grab every parameter that shares this root folder
-                var itemsInGroup = oldParams.Where(x => GetRootFolder(x.name) == rootFolder).ToList();
+                var itemsInGroup = oldParams.Where(x => GetRootFolder(names[x]) == rootFolder).ToList();
 
                 // If this is a folder group (contains slashes), sort it alphabetically internally
-                if (itemsInGroup.Any(x => x.name.Contains("/")))
+                if (itemsInGroup.Any(x => names[x].Contains("/")))
                 {
-                    itemsInGroup = itemsInGroup.OrderBy(x => x.name).ToList();
+                    itemsInGroup = itemsInGroup.OrderBy(x => names[x]).ToList();
                 }
 
                 // Add the organized chunk to our final list
@@ -405,7 +443,7 @@ public class AFParameterOrganizer : EditorWindow
             }
         }
 
-        ApplyNewParameters(groupedList.ToArray());
+        ApplyOrder(groupedList);
     }
 
     private string GetRootFolder(string paramName)
@@ -421,11 +459,37 @@ public class AFParameterOrganizer : EditorWindow
         return paramName;
     }
 
-    private void ApplyNewParameters(AnimatorControllerParameter[] newParams)
+    // Both tabs share the list UI, which works on indices; these read and write the list of the active tab
+    private List<string> GetParameterNames()
     {
-        Undo.RecordObject(currentController, "Organize Animator Parameters");
-        currentController.parameters = newParams;
-        EditorUtility.SetDirty(currentController);
+        if (IsExpressionTab) return avatarDescriptor.expressionParameters.parameters.Select(p => p.name).ToList();
+        return currentController.parameters.Select(p => p.name).ToList();
+    }
+
+    private List<string> GetParameterTypes()
+    {
+        if (IsExpressionTab) return avatarDescriptor.expressionParameters.parameters.Select(p => p.valueType.ToString()).ToList();
+        return currentController.parameters.Select(p => p.type.ToString()).ToList();
+    }
+
+    private void ApplyOrder(List<int> order)
+    {
+        if (IsExpressionTab)
+        {
+            VRCExpressionParameters expressionParameters = avatarDescriptor.expressionParameters;
+            var oldParams = expressionParameters.parameters;
+            Undo.RecordObject(expressionParameters, "Organize Expression Parameters");
+            expressionParameters.parameters = order.Select(i => oldParams[i]).ToArray();
+            EditorUtility.SetDirty(expressionParameters);
+        }
+        else
+        {
+            var oldParams = currentController.parameters;
+            Undo.RecordObject(currentController, "Organize Animator Parameters");
+            currentController.parameters = order.Select(i => oldParams[i]).ToArray();
+            EditorUtility.SetDirty(currentController);
+        }
+
         Repaint();
     }
 

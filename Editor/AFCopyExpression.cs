@@ -315,6 +315,12 @@ public class AFCopyExpression : EditorWindow
                 AssetDatabase.CopyAsset(AssetDatabase.GetAssetPath(menu), menuPathMapping[menu]);
             }
 
+            // Copy Parameters
+            if (copyParameters && avatarDescriptor.expressionParameters != null)
+            {
+                AssetDatabase.CopyAsset(AssetDatabase.GetAssetPath(avatarDescriptor.expressionParameters), GetClonePath(avatarDescriptor.expressionParameters, projectPath));
+            }
+
             // Copy Icons
             if (copyIcons)
             {

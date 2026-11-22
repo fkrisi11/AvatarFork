@@ -69,6 +69,12 @@ public class AvatarFork : EditorWindow
                 GetWindow<AFBoneRemapper>(AFBoneRemapper.Name);
             }, AFBoneRemapper.Name);
 
+        DrawButton(AFBoneAnimationRecalc.Name,
+            "Rewrite bone animations after moving bones in the model, so the mesh still deforms the same way", () =>
+            {
+                GetWindow<AFBoneAnimationRecalc>(AFBoneAnimationRecalc.Name);
+            }, AFBoneAnimationRecalc.Name);
+
         EditorGUILayout.EndScrollView();
     }
 

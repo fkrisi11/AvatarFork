@@ -383,6 +383,11 @@ public class AFWDAgnosticHelper : EditorWindow
             else
             {
                 AnalyzeMotion(childState.state.motion, stateReport);
+
+                if (childState.state.motion is BlendTree tree && tree.blendType == BlendTreeType.Direct)
+                {
+                    CollectDirectChildren(tree, stateReport.directChildren);
+                }
             }
 
             states.Add(stateReport);
@@ -392,6 +397,27 @@ public class AFWDAgnosticHelper : EditorWindow
         {
             string nextPath = $"{currentPath}/{childSM.stateMachine.name}";
             TraverseStateMachine(childSM.stateMachine, nextPath, states, layer, layerIndex);
+        }
+    }
+
+    // The motions that actually do the work inside a Direct Blend Tree, looking through nested Direct Blend Trees
+    private void CollectDirectChildren(BlendTree directTree, List<Motion> result)
+    {
+        foreach (ChildMotion child in directTree.children)
+        {
+            if (child.motion == null)
+            {
+                continue;
+            }
+
+            if (child.motion is BlendTree tree && tree.blendType == BlendTreeType.Direct)
+            {
+                CollectDirectChildren(tree, result);
+            }
+            else
+            {
+                result.Add(child.motion);
+            }
         }
     }
 
@@ -696,6 +722,29 @@ public class AFWDAgnosticHelper : EditorWindow
                     }
 
                     EditorGUILayout.EndHorizontal();
+
+                    if (state.directChildren.Count > 0)
+                    {
+                        state.isDirectChildrenExpanded = EditorGUILayout.Foldout(state.isDirectChildrenExpanded, $"Inside Direct Blend Tree ({state.directChildren.Count})", true);
+
+                        if (state.isDirectChildrenExpanded)
+                        {
+                            EditorGUI.indentLevel++;
+
+                            foreach (Motion child in state.directChildren)
+                            {
+                                Rect childRect = EditorGUI.IndentedRect(EditorGUILayout.GetControlRect(GUILayout.Height(18)));
+
+                                if (GUI.Button(childRect, EditorGUIUtility.ObjectContent(child, typeof(Motion)), EditorStyles.objectField))
+                                {
+                                    Selection.activeObject = child;
+                                    EditorGUIUtility.PingObject(child);
+                                }
+                            }
+
+                            EditorGUI.indentLevel--;
+                        }
+                    }
 
                     if (state.hasNoAnimation)
                     {
@@ -1417,6 +1466,8 @@ public class AFWDAgnosticHelper : EditorWindow
         public HashSet<AnimProperty> multiAnimatedInState = new HashSet<AnimProperty>();
         public HashSet<AnimProperty> missingProperties = new HashSet<AnimProperty>();
         public bool isMissingExpanded = false;
+        public List<Motion> directChildren = new List<Motion>();
+        public bool isDirectChildrenExpanded = true;
     }
 }
 

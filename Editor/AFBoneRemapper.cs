@@ -25,6 +25,107 @@ public class AFBoneRemapper : EditorWindow
             if (targetRoot == null) return;
             RemapBones();
         }
+
+        EditorGUILayout.Space(10);
+        EditorGUILayout.HelpBox("If remapping is not enough, this resets the FBX's rig: it saves the Humanoid bone mapping, switches the FBX to Generic and applies, back to Humanoid and applies, then restores the saved bone mapping and muscle settings, and applies.", MessageType.Info);
+
+        if (GUILayout.Button("Reset Humanoid Rig", GUILayout.Height(40)))
+        {
+            if (targetRoot == null) return;
+            ResetHumanoidRig();
+        }
+    }
+
+    private void ResetHumanoidRig()
+    {
+        var animator = targetRoot.GetComponent<Animator>();
+        string assetPath = animator != null && animator.avatar != null ? AssetDatabase.GetAssetPath(animator.avatar) : null;
+        var importer = string.IsNullOrEmpty(assetPath) ? null : AssetImporter.GetAtPath(assetPath) as ModelImporter;
+
+        if (importer == null)
+        {
+            EditorUtility.DisplayDialog(Name, "Could not find the FBX of the avatar's Animator Avatar.", "OK");
+            return;
+        }
+        if (importer.animationType != ModelImporterAnimationType.Human || importer.avatarSetup != ModelImporterAvatarSetup.CreateFromThisModel)
+        {
+            EditorUtility.DisplayDialog(Name, "The FBX has to be Humanoid, with Avatar Definition set to \"Create From This Model\".", "OK");
+            return;
+        }
+        if (importer.humanDescription.human == null || importer.humanDescription.human.Length == 0)
+        {
+            EditorUtility.DisplayDialog(Name, "The FBX has no Humanoid bone mapping to restore.", "OK");
+            return;
+        }
+        if (!EditorUtility.DisplayDialog(Name, $"This will reimport {assetPath} 3 times, and changes its Rig settings. This cannot be undone with Ctrl+Z.", "Reset Rig", "Cancel"))
+        {
+            return;
+        }
+
+        ResetRig(importer, assetPath);
+    }
+
+    private static void ResetRig(ModelImporter importer, string assetPath)
+    {
+        HumanDescription saved = importer.humanDescription;
+
+        try
+        {
+            // 1. Generic, with the old configuration cleared, so the Humanoid step configures the rig from scratch
+            importer.animationType = ModelImporterAnimationType.Generic;
+            importer.humanDescription = new HumanDescription();
+            importer.SaveAndReimport();
+
+            // 2. Humanoid, Unity auto-configures the rig and takes the rest pose from the current FBX
+            importer.animationType = ModelImporterAnimationType.Human;
+            importer.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
+            importer.SaveAndReimport();
+
+            HumanDescription fresh = importer.humanDescription;
+            if (fresh.skeleton == null || fresh.skeleton.Length == 0)
+            {
+                throw new System.Exception("Unity could not create a skeleton for the FBX.");
+            }
+
+            // 3. Saved bone mapping and muscle settings, on top of the new rest pose
+            var skeletonNames = new HashSet<string>(fresh.skeleton.Select(s => s.name));
+            var missing = saved.human.Where(h => !skeletonNames.Contains(h.boneName)).ToList();
+            foreach (var h in missing)
+            {
+                Debug.LogWarning($"{Name}: Bone '{h.boneName}' ({h.humanName}) no longer exists in the FBX, it was left out of the mapping.");
+            }
+
+            fresh.human = saved.human.Where(h => skeletonNames.Contains(h.boneName)).ToArray();
+            fresh.upperArmTwist = saved.upperArmTwist;
+            fresh.lowerArmTwist = saved.lowerArmTwist;
+            fresh.upperLegTwist = saved.upperLegTwist;
+            fresh.lowerLegTwist = saved.lowerLegTwist;
+            fresh.armStretch = saved.armStretch;
+            fresh.legStretch = saved.legStretch;
+            fresh.feetSpacing = saved.feetSpacing;
+            fresh.hasTranslationDoF = saved.hasTranslationDoF;
+            importer.humanDescription = fresh;
+            importer.SaveAndReimport();
+        }
+        catch (System.Exception e)
+        {
+            // Put the original configuration back, so the FBX isn't left Generic or half configured
+            importer.animationType = ModelImporterAnimationType.Human;
+            importer.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
+            importer.humanDescription = saved;
+            importer.SaveAndReimport();
+            Debug.LogError($"{Name}: Resetting the rig failed, the original rig settings were restored. {e.Message}");
+            return;
+        }
+
+        var avatar = AssetDatabase.LoadAllAssetsAtPath(assetPath).OfType<Avatar>().FirstOrDefault();
+        if (avatar == null || !avatar.isValid || !avatar.isHuman)
+        {
+            Debug.LogWarning($"{Name}: The rig was reset, but the resulting Avatar is not a valid Humanoid. Check the Rig tab of {assetPath}.");
+            return;
+        }
+
+        Debug.Log($"{Name}: Humanoid rig of {assetPath} was reset.");
     }
 
     private void RemapBones()

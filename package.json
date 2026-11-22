@@ -1,7 +1,7 @@
 {
   "name": "com.tohruthedragon.avatarfork",
   "displayName": "TohruTheDragon - Avatar Fork",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A toolset for creating custom copies of avatars",
   "url": "https://github.com/tohruthedragon/AvatarFork",
   "vpmDependencies": {},

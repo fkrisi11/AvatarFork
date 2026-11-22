@@ -11,7 +11,7 @@ using System.Linq;
 
 public class AFDynamicsOrganizer : EditorWindow
 {
-    public const string Name = "Dynamics Organier";
+    public const string Name = "Dynamics Organizer";
 
     [System.Serializable]
     public class SelectionItem<T> where T : Component
@@ -46,12 +46,16 @@ public class AFDynamicsOrganizer : EditorWindow
     private List<SelectionItem<VRCPhysBone>> physboneItems = new List<SelectionItem<VRCPhysBone>>();
     private List<SelectionItem<VRCContactSender>> senderItems = new List<SelectionItem<VRCContactSender>>();
     private List<SelectionItem<VRCContactReceiver>> receiverItems = new List<SelectionItem<VRCContactReceiver>>();
+    private List<SelectionItem<VRCConstraintBase>> constraintItems = new List<SelectionItem<VRCConstraintBase>>();
     private Dictionary<VRCPhysBoneColliderBase, VRCPhysBoneColliderBase> colliderMap = new Dictionary<VRCPhysBoneColliderBase, VRCPhysBoneColliderBase>();
+
+    // Category filter: hidden categories are also left out of Organize / Copy
+    private bool showPhysBones = true, showContacts = true, showConstraints = true;
 
     private Dictionary<AnimationClip, EditorCurveBinding[]> clipCache = new Dictionary<AnimationClip, EditorCurveBinding[]>();
     private Dictionary<AnimationClip, EditorCurveBinding[]> objectClipCache = new Dictionary<AnimationClip, EditorCurveBinding[]>();
 
-    private bool foldoutPhysBones = false, foldoutColliders = false, foldoutSenders = false, foldoutReceivers = false;
+    private bool foldoutPhysBones = false, foldoutColliders = false, foldoutSenders = false, foldoutReceivers = false, foldoutConstraints = false;
 
     // Mapping UI State
     private bool showMappingUI = false;
@@ -80,11 +84,11 @@ public class AFDynamicsOrganizer : EditorWindow
 
         if (toolMode == 0)
         {
-            EditorGUILayout.HelpBox("This tab is for organizing physbones, physbone colliders, and contacts, from the avatar's armature, to the avatar's root.", MessageType.Info);
+            EditorGUILayout.HelpBox("This tab is for organizing physbones, physbone colliders, contacts, and VRC constraints, from the avatar's armature, to the avatar's root.", MessageType.Info);
         }
         else
         {
-            EditorGUILayout.HelpBox("This tab is for copying the selected physbones, physbone collider, and contacts, from one avatar, to another version of it.", MessageType.Info);
+            EditorGUILayout.HelpBox("This tab is for copying the selected physbones, physbone collider, contacts, and VRC constraints, from one avatar, to another version of it.", MessageType.Info);
         }
 
         EditorGUI.BeginChangeCheck();
@@ -100,15 +104,6 @@ public class AFDynamicsOrganizer : EditorWindow
         if (EditorGUI.EndChangeCheck() || (avatarDescriptor != null && GUILayout.Button("Scan / Refresh Avatar")))
         {
             RefreshLists();
-
-            if (avatarDescriptor != null)
-            {
-                sourceArmatureRoot = FindArmatureRoot(avatarDescriptor.transform);
-            }
-            else
-            {
-                sourceArmatureRoot = null;
-            }
         }
         EditorGUILayout.EndVertical();
 
@@ -120,11 +115,27 @@ public class AFDynamicsOrganizer : EditorWindow
         if (GUILayout.Button("X", EditorStyles.miniButton, GUILayout.Width(20))) searchFilter = "";
         EditorGUILayout.EndHorizontal();
 
+        EditorGUILayout.BeginHorizontal(EditorStyles.toolbar);
+        showPhysBones = GUILayout.Toggle(showPhysBones, "PhysBones", EditorStyles.toolbarButton);
+        showContacts = GUILayout.Toggle(showContacts, "Contacts", EditorStyles.toolbarButton);
+        showConstraints = GUILayout.Toggle(showConstraints, "Constraints", EditorStyles.toolbarButton);
+        EditorGUILayout.EndHorizontal();
+
         scrollPos = EditorGUILayout.BeginScrollView(scrollPos);
-        foldoutPhysBones = DrawCategory("PhysBones", physboneItems, foldoutPhysBones);
-        foldoutColliders = DrawCategory("Colliders", colliderItems, foldoutColliders);
-        foldoutSenders = DrawCategory("Contact Senders", senderItems, foldoutSenders);
-        foldoutReceivers = DrawCategory("Contact Receivers", receiverItems, foldoutReceivers);
+        if (showPhysBones)
+        {
+            foldoutPhysBones = DrawCategory("PhysBones", physboneItems, foldoutPhysBones);
+            foldoutColliders = DrawCategory("Colliders", colliderItems, foldoutColliders);
+        }
+        if (showContacts)
+        {
+            foldoutSenders = DrawCategory("Contact Senders", senderItems, foldoutSenders);
+            foldoutReceivers = DrawCategory("Contact Receivers", receiverItems, foldoutReceivers);
+        }
+        if (showConstraints)
+        {
+            foldoutConstraints = DrawCategory("Constraints", constraintItems, foldoutConstraints);
+        }
         EditorGUILayout.EndScrollView();
 
         // Action Button
@@ -329,11 +340,21 @@ public class AFDynamicsOrganizer : EditorWindow
     {
         mappingItems.Clear();
 
-        var allSelected = physboneItems.Where(i => i.IsSelected).Select(i => i.Component).Cast<Component>()
-            .Concat(colliderItems.Where(i => i.IsSelected).Select(i => i.Component))
-            .Concat(senderItems.Where(i => i.IsSelected).Select(i => i.Component))
-            .Concat(receiverItems.Where(i => i.IsSelected).Select(i => i.Component))
-            .ToList();
+        var allSelected = new List<Component>();
+        if (showPhysBones)
+        {
+            allSelected.AddRange(physboneItems.Where(i => i.IsSelected).Select(i => i.Component));
+            allSelected.AddRange(colliderItems.Where(i => i.IsSelected).Select(i => i.Component));
+        }
+        if (showContacts)
+        {
+            allSelected.AddRange(senderItems.Where(i => i.IsSelected).Select(i => i.Component));
+            allSelected.AddRange(receiverItems.Where(i => i.IsSelected).Select(i => i.Component));
+        }
+        if (showConstraints)
+        {
+            allSelected.AddRange(constraintItems.Where(i => i.IsSelected).Select(i => i.Component));
+        }
 
         foreach (var comp in allSelected)
         {
@@ -373,6 +394,7 @@ public class AFDynamicsOrganizer : EditorWindow
         if (comp is VRCPhysBone pb) return pb.rootTransform;
         if (comp is VRCPhysBoneColliderBase col) return col.rootTransform;
         if (comp is ContactBase cb) return cb.rootTransform;
+        if (comp is VRCConstraintBase con) return con.TargetTransform;
         return null;
     }
 
@@ -381,6 +403,7 @@ public class AFDynamicsOrganizer : EditorWindow
         if (comp is VRCPhysBone pb) pb.rootTransform = targetT;
         else if (comp is VRCPhysBoneColliderBase col) col.rootTransform = targetT;
         else if (comp is ContactBase cb) cb.rootTransform = targetT;
+        else if (comp is VRCConstraintBase con) con.TargetTransform = targetT;
     }
 
     private void ExecuteCopy()
@@ -393,6 +416,7 @@ public class AFDynamicsOrganizer : EditorWindow
         ProcessCopyGroup(mappingItems.Where(m => m.SourceComponent is VRCPhysBoneColliderBase));
         ProcessCopyGroup(mappingItems.Where(m => m.SourceComponent is VRCPhysBone));
         ProcessCopyGroup(mappingItems.Where(m => m.SourceComponent is VRCContactSender || m.SourceComponent is VRCContactReceiver));
+        ProcessCopyGroup(mappingItems.Where(m => m.SourceComponent is VRCConstraintBase));
 
         Undo.CollapseUndoOperations(Undo.GetCurrentGroup());
         Debug.Log($"{Name}: Successfully copied dynamics to {targetAvatar.name}!");
@@ -453,6 +477,9 @@ public class AFDynamicsOrganizer : EditorWindow
                 }
 
                 // --- STRICT REFERENCE CLEANUP & MAPPING ---
+
+                // 0. Constraint sources (and any other transform) still point at the source avatar
+                if (newC is VRCConstraintBase) RemapTransformsToTarget(newC);
 
                 // 1. Map or Null Root Transforms
                 if (finalRootT != null)
@@ -517,6 +544,24 @@ public class AFDynamicsOrganizer : EditorWindow
                 EditorUtility.SetDirty(newC);
             }
         }
+    }
+
+    // Points every transform reference into the source avatar at the same path on the target avatar (null if it doesn't exist there)
+    private void RemapTransformsToTarget(Component comp)
+    {
+        var so = new SerializedObject(comp);
+        var prop = so.GetIterator();
+        while (prop.Next(true))
+        {
+            if (prop.propertyType == SerializedPropertyType.ObjectReference &&
+                prop.objectReferenceValue is Transform t && t.IsChildOf(avatarDescriptor.transform))
+            {
+                prop.objectReferenceValue = t == avatarDescriptor.transform
+                    ? targetAvatar.transform
+                    : targetAvatar.transform.Find(AnimationUtility.CalculateTransformPath(t, avatarDescriptor.transform));
+            }
+        }
+        so.ApplyModifiedPropertiesWithoutUndo();
     }
 
     private bool DrawCategory<T>(string label, List<SelectionItem<T>> items, bool foldoutState) where T : Component
@@ -592,9 +637,12 @@ public class AFDynamicsOrganizer : EditorWindow
 
     private void RefreshLists()
     {
+        sourceArmatureRoot = avatarDescriptor != null ? FindArmatureRoot(avatarDescriptor.transform) : null;
         if (avatarDescriptor == null) return;
         clipCache.Clear(); objectClipCache.Clear();
-        var layers = avatarDescriptor.baseAnimationLayers.Concat(avatarDescriptor.specialAnimationLayers);
+        // Layers are null on a descriptor that was never shown in the Inspector
+        var layers = (avatarDescriptor.baseAnimationLayers ?? new VRC.SDK3.Avatars.Components.VRCAvatarDescriptor.CustomAnimLayer[0])
+            .Concat(avatarDescriptor.specialAnimationLayers ?? new VRC.SDK3.Avatars.Components.VRCAvatarDescriptor.CustomAnimLayer[0]);
         foreach (var layer in layers)
         {
             if (layer.animatorController is AnimatorController ac)
@@ -616,9 +664,12 @@ public class AFDynamicsOrganizer : EditorWindow
         physboneItems = ScanCategory<VRCPhysBone>("Physics/Physbones");
         senderItems = ScanCategory<VRCContactSender>("Physics/Contacts/Senders");
         receiverItems = ScanCategory<VRCContactReceiver>("Physics/Contacts/Receivers");
+        // Constraints outside the armature often belong to prefab systems that expect them on their own object, so only armature ones start selected
+        constraintItems = ScanCategory<VRCConstraintBase>("Physics/Constraints",
+            c => toolMode == 1 || (sourceArmatureRoot != null && sourceArmatureRoot != avatarDescriptor.transform && c.transform.IsChildOf(sourceArmatureRoot)));
     }
 
-    private List<SelectionItem<T>> ScanCategory<T>(string targetFolderPath) where T : Component
+    private List<SelectionItem<T>> ScanCategory<T>(string targetFolderPath, System.Func<T, bool> selectByDefault = null) where T : Component
     {
         var components = avatarDescriptor.GetComponentsInChildren<T>(true).ToList();
 
@@ -631,6 +682,7 @@ public class AFDynamicsOrganizer : EditorWindow
                 continue;
 
             var newItem = new SelectionItem<T>(c);
+            if (selectByDefault != null) newItem.IsSelected = selectByDefault(c);
             newItem.OriginalPath = AnimationUtility.CalculateTransformPath(c.transform, avatarDescriptor.transform);
 
             foreach (var clipData in clipCache)
@@ -652,7 +704,7 @@ public class AFDynamicsOrganizer : EditorWindow
         if (binding.type == typeof(Transform)) return false;
         if (binding.type == typeof(GameObject) && binding.propertyName == "m_IsActive") return true;
         System.Type t = binding.type;
-        return typeof(VRCPhysBone).IsAssignableFrom(t) || typeof(VRCPhysBoneColliderBase).IsAssignableFrom(t) || typeof(ContactBase).IsAssignableFrom(t);
+        return typeof(VRCPhysBone).IsAssignableFrom(t) || typeof(VRCPhysBoneColliderBase).IsAssignableFrom(t) || typeof(ContactBase).IsAssignableFrom(t) || typeof(VRCConstraintBase).IsAssignableFrom(t);
     }
 
     private void Organize()
@@ -662,28 +714,41 @@ public class AFDynamicsOrganizer : EditorWindow
         Undo.SetCurrentGroupName("Organize Dynamics");
         Transform physicsRoot = null;
         Dictionary<string, string> pathMap = new Dictionary<string, string>();
+        Dictionary<Component, Component> componentMap = new Dictionary<Component, Component>();
 
-        ProcessSection(colliderItems, "Colliders", ref physicsRoot, ref pathMap);
-        ProcessSection(physboneItems, "Physbones", ref physicsRoot, ref pathMap);
+        if (showPhysBones)
+        {
+            ProcessSection(colliderItems, "Colliders", ref physicsRoot, ref pathMap, componentMap);
+            ProcessSection(physboneItems, "Physbones", ref physicsRoot, ref pathMap, componentMap);
+        }
 
-        if (senderItems.Any(i => i.IsSelected) || receiverItems.Any(i => i.IsSelected))
+        if (showContacts && (senderItems.Any(i => i.IsSelected) || receiverItems.Any(i => i.IsSelected)))
         {
             if (physicsRoot == null) physicsRoot = GetOrCreateFolder(root.transform, "Physics");
             Transform contactRoot = GetOrCreateFolder(physicsRoot, "Contacts");
-            ProcessSection(senderItems, "Senders", ref contactRoot, ref pathMap);
-            ProcessSection(receiverItems, "Receivers", ref contactRoot, ref pathMap);
+            ProcessSection(senderItems, "Senders", ref contactRoot, ref pathMap, componentMap);
+            ProcessSection(receiverItems, "Receivers", ref contactRoot, ref pathMap, componentMap);
         }
+
+        if (showConstraints)
+        {
+            ProcessSection(constraintItems, "Constraints", ref physicsRoot, ref pathMap, componentMap);
+        }
+
+        // Old components are kept alive until every reference to them (e.g. PhysBone collider lists) points at the new copies
+        RemapReferences(componentMap);
+        foreach (var oldC in componentMap.Keys) Undo.DestroyObjectImmediate(oldC);
 
         if (repathAnimations && pathMap.Count > 0)
         {
-            foreach (var clip in clipCache.Keys) { Undo.RecordObject(clip, "Repath Animations"); RepathClip(clip, pathMap); }
+            foreach (var clip in clipCache.Keys) { Undo.RecordObject(clip, "Repath Animations"); RepathClip(clip, pathMap); CopyActiveCurves(clip, pathMap); }
         }
         Undo.CollapseUndoOperations(Undo.GetCurrentGroup());
         RefreshLists();
         Debug.Log($"{Name}: Dynamics Organized!");
     }
 
-    private void ProcessSection<T>(List<SelectionItem<T>> items, string folderName, ref Transform parent, ref Dictionary<string, string> pathMap) where T : Component
+    private void ProcessSection<T>(List<SelectionItem<T>> items, string folderName, ref Transform parent, ref Dictionary<string, string> pathMap, Dictionary<Component, Component> componentMap) where T : Component
     {
         var selected = items.Where(i => i.IsSelected).ToList();
         if (selected.Count == 0) return;
@@ -694,15 +759,38 @@ public class AFDynamicsOrganizer : EditorWindow
             var oldC = item.Component;
             GameObject newGO = new GameObject(GetUniqueName(targetFolder, oldC.gameObject.name));
             newGO.transform.SetParent(targetFolder, false);
-            newGO.SetActive(oldC.gameObject.activeInHierarchy && (oldC as Behaviour).enabled);
+            // The enabled state is carried by the copied component, so animating m_Enabled keeps working
+            newGO.SetActive(oldC.gameObject.activeInHierarchy);
             var newC = newGO.AddComponent(oldC.GetType());
             EditorUtility.CopySerialized(oldC, newC);
             if (newC is VRCPhysBoneColliderBase col) col.rootTransform = col.rootTransform ? col.rootTransform : oldC.transform;
             if (newC is VRCPhysBone pb) pb.rootTransform = pb.rootTransform ? pb.rootTransform : oldC.transform;
             if (newC is ContactBase cb) cb.rootTransform = cb.rootTransform ? cb.rootTransform : oldC.transform;
+            if (newC is VRCConstraintBase con) con.TargetTransform = con.TargetTransform ? con.TargetTransform : oldC.transform;
             pathMap[item.OriginalPath] = AnimationUtility.CalculateTransformPath(newGO.transform, avatarDescriptor.transform);
             Undo.RegisterCreatedObjectUndo(newGO, "Organize");
-            Undo.DestroyObjectImmediate(oldC);
+            componentMap[oldC] = newC;
+        }
+    }
+
+    // Points every serialized reference on the avatar (PhysBone colliders, third-party tools, ...) from the old components to the new ones
+    private void RemapReferences(Dictionary<Component, Component> componentMap)
+    {
+        if (componentMap.Count == 0) return;
+        foreach (var mb in avatarDescriptor.GetComponentsInChildren<MonoBehaviour>(true))
+        {
+            if (mb == null || componentMap.ContainsKey(mb)) continue;
+            var so = new SerializedObject(mb);
+            var prop = so.GetIterator();
+            while (prop.Next(true))
+            {
+                if (prop.propertyType == SerializedPropertyType.ObjectReference &&
+                    prop.objectReferenceValue is Component c && componentMap.TryGetValue(c, out var mapped))
+                {
+                    prop.objectReferenceValue = mapped;
+                }
+            }
+            so.ApplyModifiedProperties();
         }
     }
 
@@ -713,6 +801,8 @@ public class AFDynamicsOrganizer : EditorWindow
         bool changed = false;
         foreach (var b in floatBindings)
         {
+            // GameObject toggles stay on the original object (it may be a bone or a clothing toggle), CopyActiveCurves mirrors them instead
+            if (IsActiveBinding(b)) continue;
             if (IsBindingEligible(b) && pathMap.TryGetValue(b.path, out string newPath))
             {
                 var c = AnimationUtility.GetEditorCurve(clip, b);
@@ -729,6 +819,34 @@ public class AFDynamicsOrganizer : EditorWindow
                 AnimationUtility.SetObjectReferenceCurve(clip, b, null);
                 var nb = b; nb.path = newPath; AnimationUtility.SetObjectReferenceCurve(clip, nb, k);
                 changed = true;
+            }
+        }
+        if (changed) EditorUtility.SetDirty(clip);
+    }
+
+    private static bool IsActiveBinding(EditorCurveBinding b) => b.type == typeof(GameObject) && b.propertyName == "m_IsActive";
+
+    // The moved objects are no longer under their old parents, so copy the nearest m_IsActive toggle
+    // of the old object or its ancestors onto the new object, to keep it switching on and off with them
+    private void CopyActiveCurves(AnimationClip clip, Dictionary<string, string> pathMap)
+    {
+        var activeBindings = AnimationUtility.GetCurveBindings(clip).Where(IsActiveBinding).ToDictionary(b => b.path);
+        bool changed = false;
+        foreach (var entry in pathMap)
+        {
+            if (activeBindings.ContainsKey(entry.Value)) continue;
+            string path = entry.Key;
+            while (!string.IsNullOrEmpty(path))
+            {
+                if (activeBindings.TryGetValue(path, out var source))
+                {
+                    var nb = source; nb.path = entry.Value;
+                    AnimationUtility.SetEditorCurve(clip, nb, AnimationUtility.GetEditorCurve(clip, source));
+                    changed = true;
+                    break;
+                }
+                int slash = path.LastIndexOf('/');
+                path = slash < 0 ? "" : path.Substring(0, slash);
             }
         }
         if (changed) EditorUtility.SetDirty(clip);
@@ -889,7 +1007,11 @@ public class AFDynamicsOrganizer : EditorWindow
 
     private int GetTotalSelectedCount()
     {
-        return physboneItems.Count(i => i.IsSelected) + colliderItems.Count(i => i.IsSelected) + senderItems.Count(i => i.IsSelected) + receiverItems.Count(i => i.IsSelected);
+        int count = 0;
+        if (showPhysBones) count += physboneItems.Count(i => i.IsSelected) + colliderItems.Count(i => i.IsSelected);
+        if (showContacts) count += senderItems.Count(i => i.IsSelected) + receiverItems.Count(i => i.IsSelected);
+        if (showConstraints) count += constraintItems.Count(i => i.IsSelected);
+        return count;
     }
 }
 
