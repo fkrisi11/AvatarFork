@@ -80,6 +80,14 @@ The tool can be found it Unity at: ``TohruTheDragon/AvatarFork``
   <img src="https://github.com/fkrisi11/AvatarFork/blob/main/Media/WD%20Off%20Reset%20Helper%20Sync.jpg?raw=true" />
 </div>
 
+## Bone Animation Recalc
+<p align="center">
+  Recalculate bone animation keyframes between the original and the modified rig of an avatar, where the bones were moved, rotated or scaled, preserving the original look of the animation as best as possible
+</p>
+<div align="center">
+  <img src="https://github.com/fkrisi11/AvatarFork/blob/main/Media/Bone%20Animation%20Recalc.jpg?raw=true" Width="400" />
+</div>
+
 Get the latest release here: [Link](https://github.com/fkrisi11/AvatarFork/releases/latest)
 <br>
 Or download it via VCC: [Link](https://fkrisi11.github.io/VPM-Package-Listing/)
